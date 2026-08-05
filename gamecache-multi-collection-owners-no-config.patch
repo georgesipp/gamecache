@@ -203,6 +203,54 @@ index a585eaa..fb00f4d 100644
          extra_params=extra_params,
      )
  
+diff --git a/scripts/gamecache/bgg_client.py b/scripts/gamecache/bgg_client.py
+index b131a42..831f2a5 100644
+--- a/scripts/gamecache/bgg_client.py
++++ b/scripts/gamecache/bgg_client.py
+@@ -31,7 +31,7 @@ class BGGClient:
+         self.token = token
+ 
+         if debug:
+-            logging.basicConfig(level=logging.DEBUG)
++            logging.getLogger().setLevel(logging.DEBUG)
+ 
+     def collection(self, user_name, **kwargs):
+         params = kwargs.copy()
+@@ -149,15 +149,28 @@ class BGGClient:
+ 
+         tree = fromstring(response.text)
+         if tree.tag == "message" and tree.text and "Your request for this collection has been accepted" in tree.text:
+-            if tries < 10:
+-                logger.debug(
+-                    "BGG returned \"Your request for this collection has been accepted\", "
+-                    "waiting 10 seconds before trying again..."
++            max_tries = 15
++            if tries < max_tries:
++                # This is BGG queuing an export, not an error - a fixed, modest
++                # wait (with a little jitter) is more appropriate here than
++                # exponential backoff, which used to balloon to 10+ minutes
++                # between retries and made the script look frozen.
++                wait_seconds = 15 * random.uniform(0.8, 1.2)
++                logger.info(
++                    "BGG is generating this collection (attempt %d/%d), "
++                    "waiting %.0fs before trying again...",
++                    tries + 1, max_tries, wait_seconds,
+                 )
+-                sleep_with_backoff_and_jitter(10, tries)
++                time.sleep(wait_seconds)
+                 return self._make_request(url, params=params, tries=tries + 1)
+             else:
+-                raise BGGException("BGG API request not processed in time, please try again later.")
++                raise BGGException(
++                    "BGG did not finish generating this collection in time. "
++                    "This can happen for usernames that are rarely queried, or "
++                    "don't exist / don't have a public collection. Double-check "
++                    "the username at https://boardgamegeek.com/collection/user/"
++                    "<username> and try again."
++                )
+ 
+         if tree.tag == "errors":
+             raise BGGException(
 diff --git a/scripts/gamecache/config.py b/scripts/gamecache/config.py
 index 39389fd..a4822e1 100644
 --- a/scripts/gamecache/config.py
@@ -402,6 +450,20 @@ index 172ffa7..05ac8ac 100644
          print(f"📖 Read BGG username from {config_path}: {username}")
          return username
          
+diff --git a/scripts/setup_logging.py b/scripts/setup_logging.py
+index 4e360f4..13c6154 100644
+--- a/scripts/setup_logging.py
++++ b/scripts/setup_logging.py
+@@ -3,5 +3,9 @@ import logging
+ def setup_logging():
+     """Set up logging configuration for the GameCache project."""
+ 
++    # Show INFO-level progress (e.g. BGG collection generation retries) by
++    # default, without requiring --debug.
++    logging.basicConfig(level=logging.INFO, format="%(message)s")
++
+     # Set the logging level for specific libraries to WARNING to suppress DEBUG messages
+     logging.getLogger("PIL").setLevel(logging.WARNING)
 diff --git a/scripts/validate_setup.py b/scripts/validate_setup.py
 index e0c015e..874080a 100644
 --- a/scripts/validate_setup.py
