@@ -41,14 +41,34 @@ def parse_config_file(config_path="config.txt"):
     return config
 
 
+def parse_bgg_usernames(raw_value):
+    """Split a (possibly comma-separated) bgg_username value into a clean list.
+
+    Supports both the old single-user format (bgg_username = alice) and a new
+    multi-user format (bgg_username = alice,bob,carol).
+    """
+    user_names = [name.strip() for name in raw_value.split(",")]
+    user_names = [name for name in user_names if name]
+
+    if not user_names:
+        raise ValueError("bgg_username must contain at least one BGG username")
+
+    return user_names
+
+
 def create_nested_config(config):
     """Convert flat config to nested structure for backward compatibility"""
+    user_names = parse_bgg_usernames(config["bgg_username"])
+
     nested = {
         "project": {
             "title": config["title"]
         },
         "boardgamegeek": {
-            "user_name": config["bgg_username"]
+            # Kept for backward compatibility with any code that still reads
+            # a single user_name (e.g. the BGG token setup script).
+            "user_name": user_names[0],
+            "user_names": user_names,
         },
         "github": {
             "repo": config["github_repo"]

@@ -20,9 +20,16 @@ class Downloader():
                 token=token,
             )
 
-    def collection(self, user_name, extra_params):
+    def collection(self, user_name, extra_params, owner=None):
+        """Fetch a single BGG user's collection.
+
+        `owner` is the label stored on each returned BoardGame (defaults to
+        `user_name`) so callers can merge collections from multiple users
+        and still know who owns what.
+        """
         collection_data = []
         plays_data = []
+        owner = owner or user_name
 
         if isinstance(extra_params, list):
             for params in extra_params:
@@ -67,6 +74,7 @@ class Downloader():
                 tags=game_id_to_tags[game_data["id"]],
                 numplays=game_id_to_numplays[game_data["id"]],
                 previous_players=game_id_to_players[game_data["id"]],
+                owners=[owner],
                 expansions=[
                     BoardGame(
                         expansion_data,
@@ -78,3 +86,21 @@ class Downloader():
             for game_data in games_data
         ]
         return games
+
+    def collections(self, user_names, extra_params):
+        """Fetch and merge collections for multiple BGG users.
+
+        Games owned by more than one user are de-duplicated by BGG id and
+        end up with `owners` containing every user who owns them.
+        """
+        games_by_id = {}
+
+        for user_name in user_names:
+            for game in self.collection(user_name, extra_params, owner=user_name):
+                if game.id in games_by_id:
+                    existing = games_by_id[game.id]
+                    existing.owners = sorted(set(existing.owners) | set(game.owners))
+                else:
+                    games_by_id[game.id] = game
+
+        return list(games_by_id.values())

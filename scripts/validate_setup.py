@@ -421,11 +421,12 @@ def main(argv=None):
     all_good &= validate_python_deps()
     print()
 
-    # Validate BGG user
+    # Validate BGG user(s)
     if config_valid:
-        bgg_username = config["boardgamegeek"]["user_name"]
+        bgg_usernames = config["boardgamegeek"].get("user_names", [config["boardgamegeek"]["user_name"]])
         bgg_token = config["boardgamegeek"].get("token")
-        all_good &= validate_bgg_user(bgg_username, bgg_token)
+        for bgg_username in bgg_usernames:
+            all_good &= validate_bgg_user(bgg_username, bgg_token)
 
     print("\n" + "=" * 50)
 

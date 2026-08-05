@@ -36,14 +36,19 @@ def get_bgg_username_from_config(config_path="config.ini"):
 
     try:
         config = parse_config_file(config_path)
-        username = config.get('bgg_username')
-        
-        if not username:
+        raw_username = config.get('bgg_username')
+
+        if not raw_username:
             print(f"❌ Error: 'bgg_username' not found in {config_path}")
             print(f"   Please add your BGG username to the config file:")
             print(f"   bgg_username = YOUR_BGG_USERNAME")
             return None
-        
+
+        # bgg_username may be a comma-separated list when multiple
+        # collections are configured. The token is a shared application
+        # token, so any one of the usernames works to generate it.
+        username = raw_username.split(",")[0].strip()
+
         print(f"📖 Read BGG username from {config_path}: {username}")
         return username
         

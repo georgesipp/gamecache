@@ -198,7 +198,7 @@ function loadAllGames() {
   const stmt = db.prepare(`
     SELECT id, name, description, categories, mechanics, players, weight,
            playing_time, min_age, rank, usersrated, numowned, rating,
-           numplays, image, tags, previous_players, expansions, color
+           numplays, image, tags, previous_players, expansions, color, owners
     FROM games
     ORDER BY name
   `);
@@ -216,6 +216,7 @@ function loadAllGames() {
       row.tags = JSON.parse(row.tags || '[]');
       row.previous_players = JSON.parse(row.previous_players || '[]');
       row.expansions = JSON.parse(row.expansions || '[]');
+      row.owners = JSON.parse(row.owners || '[]');
     } catch (e) {
       console.warn('Error parsing JSON for game:', row.id, e);
     }
@@ -311,6 +312,7 @@ function setupSorting() {
 function setupFilters() {
   setupCategoriesFilter();
   setupMechanicsFilter();
+  setupOwnersFilter();
   setupPlayersFilter();
   setupWeightFilter();
   setupPlayingTimeFilter();
@@ -397,6 +399,33 @@ function setupMechanicsFilter() {
   } else {
     // Hide the filter container if no items
     const container = document.getElementById('facet-mechanics');
+    if (container) {
+      container.style.display = 'none';
+    }
+  }
+}
+
+function setupOwnersFilter() {
+  const ownerCounts = {};
+  allGames.forEach(game => {
+    (game.owners || []).forEach(owner => {
+      ownerCounts[owner] = (ownerCounts[owner] || 0) + 1;
+    });
+  });
+
+  const sortedOwners = Object.keys(ownerCounts).sort();
+  const items = sortedOwners.map(owner => ({
+    label: owner,
+    value: owner,
+    count: ownerCounts[owner]
+  }));
+
+  // Only show the filter if there's more than one owner - a single-owner
+  // collection doesn't need an "Owned by" facet.
+  if (items.length > 1) {
+    createRefinementFilter('facet-owners', 'Owned by', items, 'owners');
+  } else {
+    const container = document.getElementById('facet-owners');
     if (container) {
       container.style.display = 'none';
     }
@@ -831,6 +860,7 @@ function updateClearButtonVisibility(filters) {
     query,
     selectedCategories,
     selectedMechanics,
+    selectedOwners,
     selectedPlayerFilter,
     selectedWeight,
     selectedPlayingTime,
@@ -843,6 +873,7 @@ function updateClearButtonVisibility(filters) {
     (query && query !== '') ||
     (selectedCategories && selectedCategories.length > 0) ||
     (selectedMechanics && selectedMechanics.length > 0) ||
+    (selectedOwners && selectedOwners.length > 0) ||
     (selectedPlayerFilter && selectedPlayerFilter !== 'any') ||
     (selectedWeight && selectedWeight.length > 0) ||
     (selectedPlayingTime && selectedPlayingTime.length > 0) ||
@@ -871,6 +902,16 @@ function updateFilterActiveStates(filters) {
       mechanicsFilter.classList.add('filter-active');
     } else {
       mechanicsFilter.classList.remove('filter-active');
+    }
+  }
+
+  // Update owners filter
+  const ownersFilter = document.getElementById('facet-owners');
+  if (ownersFilter) {
+    if (filters.selectedOwners && filters.selectedOwners.length > 0) {
+      ownersFilter.classList.add('filter-active');
+    } else {
+      ownersFilter.classList.remove('filter-active');
     }
   }
 
@@ -944,6 +985,7 @@ function getFiltersFromURL() {
     query: params.get('q') || '',
     selectedCategories: params.get('categories')?.split(',').filter(Boolean) || [],
     selectedMechanics: params.get('mechanics')?.split(',').filter(Boolean) || [],
+    selectedOwners: params.get('owners')?.split(',').filter(Boolean) || [],
     selectedPlayerFilter: params.get('players') || 'any',
     selectedWeight: params.get('weight')?.split(',').filter(Boolean) || [],
     selectedPlayingTime: params.get('playing_time')?.split(',').filter(Boolean) || [],
@@ -959,6 +1001,7 @@ function getFiltersFromUI() {
   const query = document.getElementById('search-input')?.value.toLowerCase().trim() || '';
   const selectedCategories = getSelectedValues('categories');
   const selectedMechanics = getSelectedValues('mechanics');
+  const selectedOwners = getSelectedValues('owners');
   const selectedPlayerFilter = document.querySelector('input[name="players"]:checked')?.value || 'any';
   const selectedWeight = getSelectedValues('weight');
   const selectedPlayingTime = getSelectedValues('playing_time');
@@ -971,6 +1014,7 @@ function getFiltersFromUI() {
     query,
     selectedCategories,
     selectedMechanics,
+    selectedOwners,
     selectedPlayerFilter,
     selectedWeight,
     selectedPlayingTime,
@@ -988,6 +1032,7 @@ function updateURLWithFilters(filters) {
   if (filters.query) params.set('q', filters.query);
   if (filters.selectedCategories?.length) params.set('categories', filters.selectedCategories.join(','));
   if (filters.selectedMechanics?.length) params.set('mechanics', filters.selectedMechanics.join(','));
+  if (filters.selectedOwners?.length) params.set('owners', filters.selectedOwners.join(','));
   if (filters.selectedPlayerFilter && filters.selectedPlayerFilter !== 'any') params.set('players', filters.selectedPlayerFilter);
   if (filters.selectedWeight?.length) params.set('weight', filters.selectedWeight.join(','));
   if (filters.selectedPlayingTime?.length) params.set('playing_time', filters.selectedPlayingTime.join(','));
@@ -1009,6 +1054,7 @@ function updateUIFromState(state) {
   const checkboxFilters = {
     'categories': state.selectedCategories,
     'mechanics': state.selectedMechanics,
+    'owners': state.selectedOwners,
     'weight': state.selectedWeight,
     'playing_time': state.selectedPlayingTime,
     'previous_players': state.selectedPreviousPlayers,
@@ -1101,6 +1147,7 @@ function filterGames(gamesToFilter, filters) {
     query,
     selectedCategories,
     selectedMechanics,
+    selectedOwners,
     selectedPlayerFilter,
     selectedWeight,
     selectedPlayingTime,
@@ -1122,6 +1169,11 @@ function filterGames(gamesToFilter, filters) {
 
     if (selectedMechanics.length > 0 &&
       !selectedMechanics.some(mech => game.mechanics.includes(mech))) {
+      return false;
+    }
+
+    if (selectedOwners && selectedOwners.length > 0 &&
+      !selectedOwners.some(owner => (game.owners || []).includes(owner))) {
       return false;
     }
 
@@ -1265,6 +1317,19 @@ function updateAllFilterCounts(filters) {
     });
   });
   updateCountsInDOM('facet-mechanics', mechanicCounts);
+
+  const ownerFilters = {
+    ...filters,
+    selectedOwners: []
+  };
+  const gamesForOwnerCount = filterGames(allGames, ownerFilters);
+  const ownerCounts = {};
+  gamesForOwnerCount.forEach(game => {
+    (game.owners || []).forEach(owner => {
+      ownerCounts[owner] = (ownerCounts[owner] || 0) + 1;
+    });
+  });
+  updateCountsInDOM('facet-owners', ownerCounts);
 
   const playerFilters = {
     ...filters,

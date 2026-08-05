@@ -52,7 +52,8 @@ class SqliteIndexer:
                 tags TEXT,        -- JSON array
                 previous_players TEXT,  -- JSON array
                 expansions TEXT,  -- JSON array
-                color TEXT       -- Changed from colors to color (singular)
+                color TEXT,      -- Changed from colors to color (singular)
+                owners TEXT      -- JSON array of BGG usernames who own this game
             )
         ''')
 
@@ -66,6 +67,7 @@ class SqliteIndexer:
         cursor.execute('CREATE INDEX idx_rank ON games(rank)')
         cursor.execute('CREATE INDEX idx_rating ON games(rating)')
         cursor.execute('CREATE INDEX idx_numplays ON games(numplays)')
+        cursor.execute('CREATE INDEX idx_owners ON games(owners)')
 
         conn.commit()
         conn.close()
@@ -100,6 +102,7 @@ class SqliteIndexer:
             players_json = json.dumps(game.get('players', []))
             tags_json = json.dumps(game.get('tags', []))
             previous_players_json = json.dumps(game.get('previous_players', []))
+            owners_json = json.dumps(game.get('owners', []))
             expansions_list = game.get('expansions', [])
             expansions_json = json.dumps([self._expansion_to_dict(exp) for exp in expansions_list if exp])
 
@@ -141,8 +144,8 @@ class SqliteIndexer:
                 INSERT INTO games (
                     id, name, description, categories, mechanics, players,
                     weight, playing_time, min_age, rank, usersrated, numowned,
-                    rating, numplays, image, tags, previous_players, expansions, color
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    rating, numplays, image, tags, previous_players, expansions, color, owners
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 game.get('id'), game.get('name'), game.get('description'), categories_json, mechanics_json,
                 players_json,
@@ -154,7 +157,7 @@ class SqliteIndexer:
                 int(game.get('numowned')) if game.get('numowned') is not None else None,
                 float(game.get('rating')) if game.get('rating') is not None else None,
                 game.get('numplays'), game.get('image'), tags_json, previous_players_json,
-                expansions_json, color_str
+                expansions_json, color_str, owners_json
             ))
         conn.commit()
         conn.close()

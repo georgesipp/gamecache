@@ -1,0 +1,424 @@
+diff --git a/app-sqlite.js b/app-sqlite.js
+index 5546370..5a1b88c 100644
+--- a/app-sqlite.js
++++ b/app-sqlite.js
+@@ -198,7 +198,7 @@ function loadAllGames() {
+   const stmt = db.prepare(`
+     SELECT id, name, description, categories, mechanics, players, weight,
+            playing_time, min_age, rank, usersrated, numowned, rating,
+-           numplays, image, tags, previous_players, expansions, color
++           numplays, image, tags, previous_players, expansions, color, owners
+     FROM games
+     ORDER BY name
+   `);
+@@ -216,6 +216,7 @@ function loadAllGames() {
+       row.tags = JSON.parse(row.tags || '[]');
+       row.previous_players = JSON.parse(row.previous_players || '[]');
+       row.expansions = JSON.parse(row.expansions || '[]');
++      row.owners = JSON.parse(row.owners || '[]');
+     } catch (e) {
+       console.warn('Error parsing JSON for game:', row.id, e);
+     }
+@@ -311,6 +312,7 @@ function setupSorting() {
+ function setupFilters() {
+   setupCategoriesFilter();
+   setupMechanicsFilter();
++  setupOwnersFilter();
+   setupPlayersFilter();
+   setupWeightFilter();
+   setupPlayingTimeFilter();
+@@ -403,6 +405,33 @@ function setupMechanicsFilter() {
+   }
+ }
+ 
++function setupOwnersFilter() {
++  const ownerCounts = {};
++  allGames.forEach(game => {
++    (game.owners || []).forEach(owner => {
++      ownerCounts[owner] = (ownerCounts[owner] || 0) + 1;
++    });
++  });
++
++  const sortedOwners = Object.keys(ownerCounts).sort();
++  const items = sortedOwners.map(owner => ({
++    label: owner,
++    value: owner,
++    count: ownerCounts[owner]
++  }));
++
++  // Only show the filter if there's more than one owner - a single-owner
++  // collection doesn't need an "Owned by" facet.
++  if (items.length > 1) {
++    createRefinementFilter('facet-owners', 'Owned by', items, 'owners');
++  } else {
++    const container = document.getElementById('facet-owners');
++    if (container) {
++      container.style.display = 'none';
++    }
++  }
++}
++
+ function setupPlayersFilter() {
+   const playerCounts = new Set();
+   allGames.forEach(game => {
+@@ -831,6 +860,7 @@ function updateClearButtonVisibility(filters) {
+     query,
+     selectedCategories,
+     selectedMechanics,
++    selectedOwners,
+     selectedPlayerFilter,
+     selectedWeight,
+     selectedPlayingTime,
+@@ -843,6 +873,7 @@ function updateClearButtonVisibility(filters) {
+     (query && query !== '') ||
+     (selectedCategories && selectedCategories.length > 0) ||
+     (selectedMechanics && selectedMechanics.length > 0) ||
++    (selectedOwners && selectedOwners.length > 0) ||
+     (selectedPlayerFilter && selectedPlayerFilter !== 'any') ||
+     (selectedWeight && selectedWeight.length > 0) ||
+     (selectedPlayingTime && selectedPlayingTime.length > 0) ||
+@@ -874,6 +905,16 @@ function updateFilterActiveStates(filters) {
+     }
+   }
+ 
++  // Update owners filter
++  const ownersFilter = document.getElementById('facet-owners');
++  if (ownersFilter) {
++    if (filters.selectedOwners && filters.selectedOwners.length > 0) {
++      ownersFilter.classList.add('filter-active');
++    } else {
++      ownersFilter.classList.remove('filter-active');
++    }
++  }
++
+   // Update players filter
+   const playersFilter = document.getElementById('facet-players');
+   if (playersFilter) {
+@@ -944,6 +985,7 @@ function getFiltersFromURL() {
+     query: params.get('q') || '',
+     selectedCategories: params.get('categories')?.split(',').filter(Boolean) || [],
+     selectedMechanics: params.get('mechanics')?.split(',').filter(Boolean) || [],
++    selectedOwners: params.get('owners')?.split(',').filter(Boolean) || [],
+     selectedPlayerFilter: params.get('players') || 'any',
+     selectedWeight: params.get('weight')?.split(',').filter(Boolean) || [],
+     selectedPlayingTime: params.get('playing_time')?.split(',').filter(Boolean) || [],
+@@ -959,6 +1001,7 @@ function getFiltersFromUI() {
+   const query = document.getElementById('search-input')?.value.toLowerCase().trim() || '';
+   const selectedCategories = getSelectedValues('categories');
+   const selectedMechanics = getSelectedValues('mechanics');
++  const selectedOwners = getSelectedValues('owners');
+   const selectedPlayerFilter = document.querySelector('input[name="players"]:checked')?.value || 'any';
+   const selectedWeight = getSelectedValues('weight');
+   const selectedPlayingTime = getSelectedValues('playing_time');
+@@ -971,6 +1014,7 @@ function getFiltersFromUI() {
+     query,
+     selectedCategories,
+     selectedMechanics,
++    selectedOwners,
+     selectedPlayerFilter,
+     selectedWeight,
+     selectedPlayingTime,
+@@ -988,6 +1032,7 @@ function updateURLWithFilters(filters) {
+   if (filters.query) params.set('q', filters.query);
+   if (filters.selectedCategories?.length) params.set('categories', filters.selectedCategories.join(','));
+   if (filters.selectedMechanics?.length) params.set('mechanics', filters.selectedMechanics.join(','));
++  if (filters.selectedOwners?.length) params.set('owners', filters.selectedOwners.join(','));
+   if (filters.selectedPlayerFilter && filters.selectedPlayerFilter !== 'any') params.set('players', filters.selectedPlayerFilter);
+   if (filters.selectedWeight?.length) params.set('weight', filters.selectedWeight.join(','));
+   if (filters.selectedPlayingTime?.length) params.set('playing_time', filters.selectedPlayingTime.join(','));
+@@ -1009,6 +1054,7 @@ function updateUIFromState(state) {
+   const checkboxFilters = {
+     'categories': state.selectedCategories,
+     'mechanics': state.selectedMechanics,
++    'owners': state.selectedOwners,
+     'weight': state.selectedWeight,
+     'playing_time': state.selectedPlayingTime,
+     'previous_players': state.selectedPreviousPlayers,
+@@ -1101,6 +1147,7 @@ function filterGames(gamesToFilter, filters) {
+     query,
+     selectedCategories,
+     selectedMechanics,
++    selectedOwners,
+     selectedPlayerFilter,
+     selectedWeight,
+     selectedPlayingTime,
+@@ -1125,6 +1172,11 @@ function filterGames(gamesToFilter, filters) {
+       return false;
+     }
+ 
++    if (selectedOwners && selectedOwners.length > 0 &&
++      !selectedOwners.some(owner => (game.owners || []).includes(owner))) {
++      return false;
++    }
++
+     if (selectedPlayerFilter && selectedPlayerFilter !== 'any') {
+       // Handle both simple player count (e.g., "2") and detailed format (e.g., "2-best")
+       const filterParts = selectedPlayerFilter.split('-');
+@@ -1266,6 +1318,19 @@ function updateAllFilterCounts(filters) {
+   });
+   updateCountsInDOM('facet-mechanics', mechanicCounts);
+ 
++  const ownerFilters = {
++    ...filters,
++    selectedOwners: []
++  };
++  const gamesForOwnerCount = filterGames(allGames, ownerFilters);
++  const ownerCounts = {};
++  gamesForOwnerCount.forEach(game => {
++    (game.owners || []).forEach(owner => {
++      ownerCounts[owner] = (ownerCounts[owner] || 0) + 1;
++    });
++  });
++  updateCountsInDOM('facet-owners', ownerCounts);
++
+   const playerFilters = {
+     ...filters,
+     selectedPlayerFilter: 'any'
+diff --git a/index.html b/index.html
+index cc6d2a6..de12db4 100644
+--- a/index.html
++++ b/index.html
+@@ -28,6 +28,7 @@
+       <div id="facet-weight"></div>
+       <div id="facet-categories"></div>
+       <div id="facet-mechanics"></div>
++      <div id="facet-owners"></div>
+       <div id="facet-min-age"></div>
+       <div id="facet-previous-players"></div>
+       <div id="facet-numplays"></div>
+diff --git a/scripts/download_and_index.py b/scripts/download_and_index.py
+index a585eaa..fb00f4d 100644
+--- a/scripts/download_and_index.py
++++ b/scripts/download_and_index.py
+@@ -114,8 +114,10 @@ def main(args):
+         token=bgg_token,
+     )
+     extra_params = SETTINGS["boardgamegeek"].get("extra_params", {"own": 1})
+-    collection = downloader.collection(
+-        user_name=SETTINGS["boardgamegeek"]["user_name"],
++    user_names = SETTINGS["boardgamegeek"]["user_names"]
++    print(f"Fetching collection for: {', '.join(user_names)}")
++    collection = downloader.collections(
++        user_names=user_names,
+         extra_params=extra_params,
+     )
+ 
+diff --git a/scripts/gamecache/config.py b/scripts/gamecache/config.py
+index 39389fd..a4822e1 100644
+--- a/scripts/gamecache/config.py
++++ b/scripts/gamecache/config.py
+@@ -41,14 +41,34 @@ def parse_config_file(config_path="config.txt"):
+     return config
+ 
+ 
++def parse_bgg_usernames(raw_value):
++    """Split a (possibly comma-separated) bgg_username value into a clean list.
++
++    Supports both the old single-user format (bgg_username = alice) and a new
++    multi-user format (bgg_username = alice,bob,carol).
++    """
++    user_names = [name.strip() for name in raw_value.split(",")]
++    user_names = [name for name in user_names if name]
++
++    if not user_names:
++        raise ValueError("bgg_username must contain at least one BGG username")
++
++    return user_names
++
++
+ def create_nested_config(config):
+     """Convert flat config to nested structure for backward compatibility"""
++    user_names = parse_bgg_usernames(config["bgg_username"])
++
+     nested = {
+         "project": {
+             "title": config["title"]
+         },
+         "boardgamegeek": {
+-            "user_name": config["bgg_username"]
++            # Kept for backward compatibility with any code that still reads
++            # a single user_name (e.g. the BGG token setup script).
++            "user_name": user_names[0],
++            "user_names": user_names,
+         },
+         "github": {
+             "repo": config["github_repo"]
+diff --git a/scripts/gamecache/downloader.py b/scripts/gamecache/downloader.py
+index 6eb291c..e773ccd 100644
+--- a/scripts/gamecache/downloader.py
++++ b/scripts/gamecache/downloader.py
+@@ -20,9 +20,16 @@ class Downloader():
+                 token=token,
+             )
+ 
+-    def collection(self, user_name, extra_params):
++    def collection(self, user_name, extra_params, owner=None):
++        """Fetch a single BGG user's collection.
++
++        `owner` is the label stored on each returned BoardGame (defaults to
++        `user_name`) so callers can merge collections from multiple users
++        and still know who owns what.
++        """
+         collection_data = []
+         plays_data = []
++        owner = owner or user_name
+ 
+         if isinstance(extra_params, list):
+             for params in extra_params:
+@@ -67,6 +74,7 @@ class Downloader():
+                 tags=game_id_to_tags[game_data["id"]],
+                 numplays=game_id_to_numplays[game_data["id"]],
+                 previous_players=game_id_to_players[game_data["id"]],
++                owners=[owner],
+                 expansions=[
+                     BoardGame(
+                         expansion_data,
+@@ -78,3 +86,21 @@ class Downloader():
+             for game_data in games_data
+         ]
+         return games
++
++    def collections(self, user_names, extra_params):
++        """Fetch and merge collections for multiple BGG users.
++
++        Games owned by more than one user are de-duplicated by BGG id and
++        end up with `owners` containing every user who owns them.
++        """
++        games_by_id = {}
++
++        for user_name in user_names:
++            for game in self.collection(user_name, extra_params, owner=user_name):
++                if game.id in games_by_id:
++                    existing = games_by_id[game.id]
++                    existing.owners = sorted(set(existing.owners) | set(game.owners))
++                else:
++                    games_by_id[game.id] = game
++
++        return list(games_by_id.values())
+diff --git a/scripts/gamecache/models.py b/scripts/gamecache/models.py
+index c611f19..af48003 100644
+--- a/scripts/gamecache/models.py
++++ b/scripts/gamecache/models.py
+@@ -3,7 +3,7 @@ import html
+ 
+ 
+ class BoardGame:
+-    def __init__(self, game_data, image="", tags=[], numplays=0, previous_players=[], expansions=[]):
++    def __init__(self, game_data, image="", tags=[], numplays=0, previous_players=[], expansions=[], owners=[]):
+         self.id = game_data["id"]
+         self.name = game_data["name"]
+         self.description = html.unescape(game_data["description"])
+@@ -24,6 +24,7 @@ class BoardGame:
+         self.tags = tags
+         self.previous_players = previous_players
+         self.expansions = expansions
++        self.owners = owners
+ 
+     def calc_num_players(self, game_data, expansions):
+         num_players = game_data["suggested_numplayers"].copy()
+@@ -118,6 +119,7 @@ class BoardGame:
+             "tags": self.tags,
+             "previous_players": self.previous_players,
+             "expansions": self.expansions,
++            "owners": self.owners,
+             # Add the color field, ensuring it's handled if not present
+             "color": getattr(self, 'color', None)
+         }
+diff --git a/scripts/gamecache/sqlite_indexer.py b/scripts/gamecache/sqlite_indexer.py
+index 496d399..c0b804f 100644
+--- a/scripts/gamecache/sqlite_indexer.py
++++ b/scripts/gamecache/sqlite_indexer.py
+@@ -52,7 +52,8 @@ class SqliteIndexer:
+                 tags TEXT,        -- JSON array
+                 previous_players TEXT,  -- JSON array
+                 expansions TEXT,  -- JSON array
+-                color TEXT       -- Changed from colors to color (singular)
++                color TEXT,      -- Changed from colors to color (singular)
++                owners TEXT      -- JSON array of BGG usernames who own this game
+             )
+         ''')
+ 
+@@ -66,6 +67,7 @@ class SqliteIndexer:
+         cursor.execute('CREATE INDEX idx_rank ON games(rank)')
+         cursor.execute('CREATE INDEX idx_rating ON games(rating)')
+         cursor.execute('CREATE INDEX idx_numplays ON games(numplays)')
++        cursor.execute('CREATE INDEX idx_owners ON games(owners)')
+ 
+         conn.commit()
+         conn.close()
+@@ -100,6 +102,7 @@ class SqliteIndexer:
+             players_json = json.dumps(game.get('players', []))
+             tags_json = json.dumps(game.get('tags', []))
+             previous_players_json = json.dumps(game.get('previous_players', []))
++            owners_json = json.dumps(game.get('owners', []))
+             expansions_list = game.get('expansions', [])
+             expansions_json = json.dumps([self._expansion_to_dict(exp) for exp in expansions_list if exp])
+ 
+@@ -141,8 +144,8 @@ class SqliteIndexer:
+                 INSERT INTO games (
+                     id, name, description, categories, mechanics, players,
+                     weight, playing_time, min_age, rank, usersrated, numowned,
+-                    rating, numplays, image, tags, previous_players, expansions, color
+-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++                    rating, numplays, image, tags, previous_players, expansions, color, owners
++                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ''', (
+                 game.get('id'), game.get('name'), game.get('description'), categories_json, mechanics_json,
+                 players_json,
+@@ -154,7 +157,7 @@ class SqliteIndexer:
+                 int(game.get('numowned')) if game.get('numowned') is not None else None,
+                 float(game.get('rating')) if game.get('rating') is not None else None,
+                 game.get('numplays'), game.get('image'), tags_json, previous_players_json,
+-                expansions_json, color_str
++                expansions_json, color_str, owners_json
+             ))
+         conn.commit()
+         conn.close()
+diff --git a/scripts/setup_bgg_token.py b/scripts/setup_bgg_token.py
+index 172ffa7..05ac8ac 100644
+--- a/scripts/setup_bgg_token.py
++++ b/scripts/setup_bgg_token.py
+@@ -36,14 +36,19 @@ def get_bgg_username_from_config(config_path="config.ini"):
+ 
+     try:
+         config = parse_config_file(config_path)
+-        username = config.get('bgg_username')
+-        
+-        if not username:
++        raw_username = config.get('bgg_username')
++
++        if not raw_username:
+             print(f"❌ Error: 'bgg_username' not found in {config_path}")
+             print(f"   Please add your BGG username to the config file:")
+             print(f"   bgg_username = YOUR_BGG_USERNAME")
+             return None
+-        
++
++        # bgg_username may be a comma-separated list when multiple
++        # collections are configured. The token is a shared application
++        # token, so any one of the usernames works to generate it.
++        username = raw_username.split(",")[0].strip()
++
+         print(f"📖 Read BGG username from {config_path}: {username}")
+         return username
+         
+diff --git a/scripts/validate_setup.py b/scripts/validate_setup.py
+index e0c015e..874080a 100644
+--- a/scripts/validate_setup.py
++++ b/scripts/validate_setup.py
+@@ -421,11 +421,12 @@ def main(argv=None):
+     all_good &= validate_python_deps()
+     print()
+ 
+-    # Validate BGG user
++    # Validate BGG user(s)
+     if config_valid:
+-        bgg_username = config["boardgamegeek"]["user_name"]
++        bgg_usernames = config["boardgamegeek"].get("user_names", [config["boardgamegeek"]["user_name"]])
+         bgg_token = config["boardgamegeek"].get("token")
+-        all_good &= validate_bgg_user(bgg_username, bgg_token)
++        for bgg_username in bgg_usernames:
++            all_good &= validate_bgg_user(bgg_username, bgg_token)
+ 
+     print("\n" + "=" * 50)
+ 

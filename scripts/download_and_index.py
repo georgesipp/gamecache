@@ -114,8 +114,10 @@ def main(args):
         token=bgg_token,
     )
     extra_params = SETTINGS["boardgamegeek"].get("extra_params", {"own": 1})
-    collection = downloader.collection(
-        user_name=SETTINGS["boardgamegeek"]["user_name"],
+    user_names = SETTINGS["boardgamegeek"]["user_names"]
+    print(f"Fetching collection for: {', '.join(user_names)}")
+    collection = downloader.collections(
+        user_names=user_names,
         extra_params=extra_params,
     )
 
