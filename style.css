@@ -246,6 +246,24 @@ body {
     list-style: none;
 }
 
+.for-sale-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 5;
+    background: #b71c1c;
+    color: #fff;
+    border: 2px solid #fff;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
 .game-image {
     display: block;
     margin: 0;

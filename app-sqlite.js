@@ -313,6 +313,7 @@ function setupFilters() {
   setupCategoriesFilter();
   setupMechanicsFilter();
   setupOwnersFilter();
+  setupForSaleFilter();
   setupPlayersFilter();
   setupWeightFilter();
   setupPlayingTimeFilter();
@@ -426,6 +427,26 @@ function setupOwnersFilter() {
     createRefinementFilter('facet-owners', 'Owned by', items, 'owners');
   } else {
     const container = document.getElementById('facet-owners');
+    if (container) {
+      container.style.display = 'none';
+    }
+  }
+}
+
+function setupForSaleFilter() {
+  // "fortrade" is one of the BGG collection status flags carried in game.tags.
+  const forSaleCount = allGames.filter(game => (game.tags || []).includes('fortrade')).length;
+
+  // Only surface the filter when at least one game is actually for sale.
+  if (forSaleCount > 0) {
+    const items = [{
+      label: 'For sale',
+      value: 'fortrade',
+      count: forSaleCount
+    }];
+    createRefinementFilter('facet-forsale', 'Availability', items, 'tags');
+  } else {
+    const container = document.getElementById('facet-forsale');
     if (container) {
       container.style.display = 'none';
     }
@@ -861,6 +882,7 @@ function updateClearButtonVisibility(filters) {
     selectedCategories,
     selectedMechanics,
     selectedOwners,
+    selectedTags,
     selectedPlayerFilter,
     selectedWeight,
     selectedPlayingTime,
@@ -874,6 +896,7 @@ function updateClearButtonVisibility(filters) {
     (selectedCategories && selectedCategories.length > 0) ||
     (selectedMechanics && selectedMechanics.length > 0) ||
     (selectedOwners && selectedOwners.length > 0) ||
+    (selectedTags && selectedTags.length > 0) ||
     (selectedPlayerFilter && selectedPlayerFilter !== 'any') ||
     (selectedWeight && selectedWeight.length > 0) ||
     (selectedPlayingTime && selectedPlayingTime.length > 0) ||
@@ -912,6 +935,16 @@ function updateFilterActiveStates(filters) {
       ownersFilter.classList.add('filter-active');
     } else {
       ownersFilter.classList.remove('filter-active');
+    }
+  }
+
+  // Update for-sale filter
+  const forSaleFilter = document.getElementById('facet-forsale');
+  if (forSaleFilter) {
+    if (filters.selectedTags && filters.selectedTags.length > 0) {
+      forSaleFilter.classList.add('filter-active');
+    } else {
+      forSaleFilter.classList.remove('filter-active');
     }
   }
 
@@ -986,6 +1019,7 @@ function getFiltersFromURL() {
     selectedCategories: params.get('categories')?.split(',').filter(Boolean) || [],
     selectedMechanics: params.get('mechanics')?.split(',').filter(Boolean) || [],
     selectedOwners: params.get('owners')?.split(',').filter(Boolean) || [],
+    selectedTags: params.get('tags')?.split(',').filter(Boolean) || [],
     selectedPlayerFilter: params.get('players') || 'any',
     selectedWeight: params.get('weight')?.split(',').filter(Boolean) || [],
     selectedPlayingTime: params.get('playing_time')?.split(',').filter(Boolean) || [],
@@ -1002,6 +1036,7 @@ function getFiltersFromUI() {
   const selectedCategories = getSelectedValues('categories');
   const selectedMechanics = getSelectedValues('mechanics');
   const selectedOwners = getSelectedValues('owners');
+  const selectedTags = getSelectedValues('tags');
   const selectedPlayerFilter = document.querySelector('input[name="players"]:checked')?.value || 'any';
   const selectedWeight = getSelectedValues('weight');
   const selectedPlayingTime = getSelectedValues('playing_time');
@@ -1015,6 +1050,7 @@ function getFiltersFromUI() {
     selectedCategories,
     selectedMechanics,
     selectedOwners,
+    selectedTags,
     selectedPlayerFilter,
     selectedWeight,
     selectedPlayingTime,
@@ -1033,6 +1069,7 @@ function updateURLWithFilters(filters) {
   if (filters.selectedCategories?.length) params.set('categories', filters.selectedCategories.join(','));
   if (filters.selectedMechanics?.length) params.set('mechanics', filters.selectedMechanics.join(','));
   if (filters.selectedOwners?.length) params.set('owners', filters.selectedOwners.join(','));
+  if (filters.selectedTags?.length) params.set('tags', filters.selectedTags.join(','));
   if (filters.selectedPlayerFilter && filters.selectedPlayerFilter !== 'any') params.set('players', filters.selectedPlayerFilter);
   if (filters.selectedWeight?.length) params.set('weight', filters.selectedWeight.join(','));
   if (filters.selectedPlayingTime?.length) params.set('playing_time', filters.selectedPlayingTime.join(','));
@@ -1055,6 +1092,7 @@ function updateUIFromState(state) {
     'categories': state.selectedCategories,
     'mechanics': state.selectedMechanics,
     'owners': state.selectedOwners,
+    'tags': state.selectedTags,
     'weight': state.selectedWeight,
     'playing_time': state.selectedPlayingTime,
     'previous_players': state.selectedPreviousPlayers,
@@ -1148,6 +1186,7 @@ function filterGames(gamesToFilter, filters) {
     selectedCategories,
     selectedMechanics,
     selectedOwners,
+    selectedTags,
     selectedPlayerFilter,
     selectedWeight,
     selectedPlayingTime,
@@ -1174,6 +1213,11 @@ function filterGames(gamesToFilter, filters) {
 
     if (selectedOwners && selectedOwners.length > 0 &&
       !selectedOwners.some(owner => (game.owners || []).includes(owner))) {
+      return false;
+    }
+
+    if (selectedTags && selectedTags.length > 0 &&
+      !selectedTags.some(tag => (game.tags || []).includes(tag))) {
       return false;
     }
 
@@ -1330,6 +1374,16 @@ function updateAllFilterCounts(filters) {
     });
   });
   updateCountsInDOM('facet-owners', ownerCounts);
+
+  const tagFilters = {
+    ...filters,
+    selectedTags: []
+  };
+  const gamesForTagCount = filterGames(allGames, tagFilters);
+  const tagCounts = {
+    fortrade: gamesForTagCount.filter(game => (game.tags || []).includes('fortrade')).length
+  };
+  updateCountsInDOM('facet-forsale', tagCounts);
 
   const playerFilters = {
     ...filters,
@@ -1521,6 +1575,12 @@ function renderGameCard(game) {
 
   // Set basic card data
   card.setAttribute('data-color', game.color || '255,255,255');
+
+  // Show the "For Sale" badge when the game is flagged for trade on BGG
+  if ((game.tags || []).includes('fortrade')) {
+    const forSaleBadge = clone.querySelector('.for-sale-badge');
+    if (forSaleBadge) forSaleBadge.style.display = 'block';
+  }
 
   // Set images
   const summaryImg = clone.querySelector('.game-image');
