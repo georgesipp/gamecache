@@ -733,3 +733,160 @@ body {
         font-size: 11px;
     }
 }
+
+/* Automatic dark mode: follows the OS / browser preference.
+   Overrides surfaces, text and borders while keeping the red (#b71c1c) accent.
+   Keep last so these win over the base rules above. */
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* Let native controls (inputs, selects, scrollbars) render dark too. */
+        color-scheme: dark;
+    }
+
+    body {
+        background: #121417;
+        color: #c3c8cd;
+    }
+
+    a,
+    .expansions-toggle,
+    .expansions-section div a {
+        color: #ff6b6b;
+    }
+
+    .search {
+        background: #1a1d21;
+    }
+
+    .facets {
+        background-color: #121417;
+    }
+
+    .filter-dropdown {
+        border-color: #333a42;
+        background-color: #1e2227;
+    }
+
+    .filter-dropdown[open]>.filter-dropdown-content {
+        background-color: #1e2227;
+        border-color: #333a42;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+    }
+
+    #search-input,
+    #sort-select {
+        background: #1e2227;
+        border-color: #333a42;
+        color: #c3c8cd;
+    }
+
+    /* Floating detail popup needs a solid surface behind its transparent sections. */
+    .game-details {
+        background: #1a1d21;
+        box-shadow: 1px 1px 15px rgba(0, 0, 0, 0.6);
+    }
+
+    .card-header,
+    .description-section,
+    .tags-section {
+        border-bottom-color: #333a42;
+    }
+
+    .stats-bar,
+    .bottom-info {
+        background: #24282e;
+        border-bottom-color: #333a42;
+    }
+
+    .stat-item {
+        color: #aeb4ba;
+    }
+
+    .complexity-gauge .gauge-bg {
+        stroke: #3a4048;
+    }
+
+    .complexity-gauge .gauge-text {
+        fill: #d0d4d8;
+    }
+
+    .tag-chip {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .tag-chip.mechanics {
+        background: #2a2f35;
+        color: #c3c8cd;
+        border-color: #3a4048;
+    }
+
+    .tag-chip.categories {
+        background: #2a2f35;
+        border-color: #3a4048;
+    }
+
+    .expansion-chip,
+    .expansions-section .expansion-chips a.expansion-tile {
+        color: #d0d4d8;
+    }
+
+    .expansion-chip {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .expansion-chip:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.25);
+        color: #fff;
+    }
+
+    .expansion-thumb {
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .expansion-tile:hover .expansion-thumb {
+        border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .facet-count {
+        background: #2a2f35;
+        color: #9aa0a6;
+    }
+
+    .filter-item:hover {
+        background: rgba(255, 107, 107, 0.12);
+    }
+
+    .pagination button {
+        background: #1e2227;
+        border-color: #333a42;
+        color: #c3c8cd;
+    }
+
+    .pagination button:hover {
+        background: #2a2f35;
+    }
+
+    .loading,
+    .no-results,
+    .pagination span {
+        color: #9aa0a6;
+    }
+
+    .error {
+        color: #ff8a80;
+        background: #2a1416;
+        border-color: #5a1e1e;
+    }
+
+    .error pre {
+        background: #1a1d21;
+        border-color: #5a1e1e;
+    }
+
+    .highlight {
+        background: #ffd54f;
+        color: #1a1d21;
+    }
+}

@@ -1952,13 +1952,19 @@ function positionPopupInViewport(popup, trigger, clickEvent = null) {
 
 function on_render() {
   const gameCards = document.querySelectorAll(".game-card");
+  // Match the popup surface to the OS/browser theme. The detail popup gets its
+  // background from this inline style (the CSS has none for light mode), so it
+  // must be set here for automatic dark mode to reach the popup.
+  const prefersDark = window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const detailsBg = prefersDark ? "#1a1d21" : "#FFFFFF";
   gameCards.forEach(function (card) {
     const color = card.getAttribute("data-color") || "255,255,255";
     const textColor = getTextColorForBg(color);
 
     const gameDetails = card.querySelector(".game-details");
     if (gameDetails) {
-      gameDetails.style.backgroundColor = '#FFFFFF';
+      gameDetails.style.backgroundColor = detailsBg;
 
       const cardHeader = card.querySelector(".card-header");
       if (cardHeader) {
